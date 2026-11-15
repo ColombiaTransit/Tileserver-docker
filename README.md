@@ -1,6 +1,6 @@
 # Tileserver-docker
 
-Docker-image met [TileServer GL](https://github.com/maptiler/tileserver-gl) voor Colombia, met styles, sprites en fonts ingebakken. Draait achter Traefik op `https://apiv2.colombiatransit.co/api/tiles/`.
+Docker-image met [TileServer GL](https://github.com/maptiler/tileserver-gl) voor Colombia, met styles, sprites en fonts ingebakken. Draait achter Traefik op `https://tileserver.colombiatransit.co/`.
 
 ```
 ghcr.io/colombiatransit/tileserver-docker:latest
@@ -26,7 +26,7 @@ Beide bestanden zijn verplicht. `update-tiles.sh` haalt ze op (vereist `python3`
 | Positron (licht, rustig; goed onder routes en haltes) | `positron` | `positron-3d` |
 | OSM Liberty (volledige kaart, met hillshade) | `osm-liberty` | `osm-liberty-3d` |
 
-Style-URL: `https://apiv2.colombiatransit.co/api/tiles/styles/<style>/style.json`
+Style-URL: `https://tileserver.colombiatransit.co/styles/<style>/style.json`
 
 De upstream-styles worden tijdens het bouwen op vaste commits opgehaald en door [`docker/build_styles.py`](docker/build_styles.py) aangepast: bronnen naar de lokale data, eigen sprites en fonts, Colombia als startpositie, en voor de 3D-varianten terrein en hillshade. De natural-earth-relief van OSM Liberty is vervangen door hillshade uit `colombia-terrain`. Styles met hoogtedata worden alleen client-side gerenderd (`serve_rendered: false`).
 
@@ -35,7 +35,7 @@ De upstream-styles worden tijdens het bouwen op vaste commits opgehaald en door 
 ```bash
 git clone https://github.com/ColombiaTransit/tileserver-docker.git
 cd tileserver-docker
-cp api-tileserver.yml /etc/traefik/   # map van de Traefik file-provider
+cp tileserver.yml /etc/traefik/       # map van de Traefik file-provider
 ./update-tiles.sh                     # eerste download van de tiles
 docker compose up -d
 ```
@@ -61,7 +61,7 @@ docker compose pull && docker compose up -d
 | `docker/start.sh` | Entrypoint; zet `--public_url` uit `PUBLIC_URL` |
 | `docker/make_test_mbtiles.py` | Kleine test-data voor de rooktest in CI |
 | `docker-compose.yml` | Container in het `traefik`-netwerk |
-| `api-tileserver.yml` | Traefik-router en middlewares op `/api/tiles` |
+| `tileserver.yml` | Traefik-router en middlewares voor `tileserver.colombiatransit.co` |
 | `update-tiles.sh` | Werkt de `.mbtiles` bij en herstart de container alleen bij wijzigingen |
 
 ## Gebruik in MapLibre
@@ -69,7 +69,7 @@ docker compose pull && docker compose up -d
 ```js
 const map = new maplibregl.Map({
   container: 'map',
-  style: 'https://apiv2.colombiatransit.co/api/tiles/styles/positron-3d/style.json'
+  style: 'https://tileserver.colombiatransit.co/styles/positron-3d/style.json'
 });
 ```
 
@@ -78,7 +78,7 @@ Terrein toevoegen aan een eigen style:
 ```js
 map.addSource('terrain', {
   type: 'raster-dem',
-  url: 'https://apiv2.colombiatransit.co/api/tiles/data/colombia-terrain.json',
+  url: 'https://tileserver.colombiatransit.co/data/colombia-terrain.json',
   tileSize: 256,
   encoding: 'mapbox'
 });

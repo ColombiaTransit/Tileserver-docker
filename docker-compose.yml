@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
 
     environment:
-      PUBLIC_URL: https://apiv2.colombiatransit.co/api/tiles/
+      PUBLIC_URL: https://tileserver.colombiatransit.co/
 
     volumes:
       # colombia.mbtiles en colombia-terrain.mbtiles (via ./update-tiles.sh)

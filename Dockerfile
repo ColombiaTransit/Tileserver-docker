@@ -56,6 +56,6 @@ COPY --chmod=755 docker/start.sh /usr/local/bin/start-tileserver
 
 # De .mbtiles-bestanden komen via een volume op /data:
 #   colombia.mbtiles en colombia-terrain.mbtiles
-# PUBLIC_URL zet --public_url, bijv. https://apiv2.colombiatransit.co/api/tiles/
+# PUBLIC_URL zet --public_url, bijv. https://tileserver.colombiatransit.co/
 ENV PUBLIC_URL=""
 ENTRYPOINT ["/usr/local/bin/start-tileserver"]

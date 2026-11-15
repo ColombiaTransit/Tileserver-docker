@@ -1,0 +1,20 @@
+http:
+
+  ## TileServer GL via tileserver.colombiatransit.co ##
+  routers:
+    tileserver:
+      entryPoints:
+        - web
+      rule: "Host(`tileserver.colombiatransit.co`)"
+      service: tileserver@docker
+      middlewares:
+        - tileserver@file
+
+  ## MIDDLEWARES ##
+  middlewares:
+    tileserver:
+      chain:
+        middlewares:
+          - default-headers
+          - real-ip
+          - compress-gzip
