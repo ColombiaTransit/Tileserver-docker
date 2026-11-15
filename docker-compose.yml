@@ -6,10 +6,12 @@ services:
 
     volumes:
       - ./data:/data
+      - ./config.json:/data/config.json:ro
+      - ./styles:/data/styles:ro
 
     command:
-      - --file
-      - /data/colombia.mbtiles
+      - --config
+      - /data/config.json
       - --public_url
       - https://apiv2.colombiatransit.co/api/tiles/
 

@@ -1,0 +1,29 @@
+{
+  "options": {
+    "paths": {
+      "root": "/data",
+      "mbtiles": "/data",
+      "styles": "/data/styles",
+      "fonts": "/usr/src/app/node_modules/tileserver-gl-styles/fonts"
+    }
+  },
+  "styles": {
+    "basic-preview": {
+      "style": "/usr/src/app/node_modules/tileserver-gl-styles/styles/basic-preview/style.json"
+    },
+    "colombia-3d": {
+      "style": "colombia-3d/style.json",
+      "serve_rendered": false
+    }
+  },
+  "data": {
+    "v3": {
+      "mbtiles": "colombia.mbtiles"
+    },
+    "colombia-terrain": {
+      "mbtiles": "colombia-terrain.mbtiles",
+      "tileSize": 256,
+      "sparse": false
+    }
+  }
+}
