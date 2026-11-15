@@ -1,11 +1,13 @@
 # syntax=docker/dockerfile:1
 ARG TILESERVER_VERSION=v5.6.0
 
+# Base image als aparte stage: COPY --from ondersteunt geen variabelen
+FROM maptiler/tileserver-gl:${TILESERVER_VERSION} AS tileserver
+
 # ---------------------------------------------------------------------------
 # Stage 1: styles, sprites en fonts ophalen (op vaste commits) en omzetten
 # ---------------------------------------------------------------------------
 FROM python:3.13-alpine AS assets
-ARG TILESERVER_VERSION
 
 # Upstream-styles, vastgepind zodat elke build hetzelfde oplevert
 ARG POSITRON_COMMIT=bed9a6349dfb431bd8a6646101d0977b59c591dd
@@ -19,10 +21,10 @@ ARG FONTS_SHA256=3a7a6c2dcd940a840aa6ffac8f39758252a667a0b329945b071fb44bf00e7f4
 RUN apk add --no-cache curl
 
 WORKDIR /src
-COPY --from=maptiler/tileserver-gl:${TILESERVER_VERSION} \
+COPY --from=tileserver \
      /usr/src/app/node_modules/tileserver-gl-styles/styles/basic-preview/style.json \
      /src/basic-preview/style.json
-COPY --from=maptiler/tileserver-gl:${TILESERVER_VERSION} \
+COPY --from=tileserver \
      /usr/src/app/node_modules/tileserver-gl-styles/LICENSE.md \
      /src/basic-preview/LICENSE.md
 
@@ -54,7 +56,7 @@ RUN python3 /build_styles.py /src /config
 # ---------------------------------------------------------------------------
 # Stage 2: tileserver-gl met de gegenereerde config
 # ---------------------------------------------------------------------------
-FROM maptiler/tileserver-gl:${TILESERVER_VERSION}
+FROM tileserver
 
 LABEL org.opencontainers.image.source="https://github.com/ColombiaTransit/tileserver-docker" \
       org.opencontainers.image.description="TileServer GL met Colombia vector- en terrain-tiles: Basic, Positron, Dark Matter, OSM Liberty (2D en 3D)" \
