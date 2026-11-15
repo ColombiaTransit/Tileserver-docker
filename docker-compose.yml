@@ -1,0 +1,25 @@
+services:
+  tileserver:
+    image: maptiler/tileserver-gl:v5.6.0
+    container_name: tileserver-colombia
+    restart: unless-stopped
+
+    volumes:
+      - ./data:/data
+
+    command:
+      - --file
+      - /data/colombia.mbtiles
+      - --public_url
+      - https://apiv2.colombiatransit.co/api/tiles/
+
+    networks:
+      - traefik
+
+    labels:
+      - traefik.enable=true
+      - traefik.http.services.tileserver.loadbalancer.server.port=8080
+
+networks:
+  traefik:
+    external: true
