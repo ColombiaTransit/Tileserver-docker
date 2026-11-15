@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-ARG TILESERVER_VERSION=v5.6.0
+ARG TILESERVER_VERSION=v5.7.0
 
 FROM maptiler/tileserver-gl:${TILESERVER_VERSION} AS tileserver
 
