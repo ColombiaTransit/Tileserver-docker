@@ -1,0 +1,105 @@
+name: docker-image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - docker/**
+      - .github/workflows/docker-image.yml
+  pull_request:
+    paths:
+      - Dockerfile
+      - docker/**
+      - .github/workflows/docker-image.yml
+  workflow_dispatch: ~
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: docker-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/tileserver-docker
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Tileserver-versie uit de Dockerfile
+        id: version
+        run: echo "tileserver=$(sed -n 's/^ARG TILESERVER_VERSION=//p' Dockerfile)" >> $GITHUB_OUTPUT
+
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.version.outputs.tileserver }},enable={{is_default_branch}}
+            type=sha,format=short
+            type=ref,event=pr
+
+      - name: Build en push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Rooktest met kleine test-mbtiles
+        if: github.event_name != 'pull_request'
+        run: |
+          set -eu
+          img=${IMAGE}:sha-${GITHUB_SHA::7}
+          mkdir -p testdata
+          python3 docker/make_test_mbtiles.py testdata
+          chmod -R a+rwX testdata
+          docker run -d --name ts -p 8080:8080 -v "$PWD/testdata:/data" \
+            -e PUBLIC_URL=http://localhost:8080/ "$img"
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8080/health >/dev/null && break
+            sleep 2
+          done
+          docker logs ts
+          curl -sf http://localhost:8080/styles.json | python3 -c '
+          import json,sys
+          ids={s["id"] for s in json.load(sys.stdin)}
+          want={f"{b}{v}" for b in ("basic-preview","positron","dark-matter","osm-liberty") for v in ("","-3d")}
+          missing=want-ids
+          print("styles:", sorted(ids))
+          sys.exit(f"ontbrekend: {missing}" if missing else 0)'
+          for s in positron dark-matter osm-liberty; do
+            curl -sf -o /dev/null "http://localhost:8080/styles/$s/sprite@2x.png"
+          done
+          curl -sf -o /dev/null "http://localhost:8080/fonts/Noto%20Sans%20Regular/0-255.pbf"
+          curl -sf -o /dev/null "http://localhost:8080/fonts/Roboto%20Regular/0-255.pbf"
+          curl -sf -o /dev/null "http://localhost:8080/data/colombia-terrain/0/0/0.png"
+          curl -sf -o /dev/null "http://localhost:8080/styles/positron/256/0/0/0.png"
+          echo "Rooktest geslaagd"
+
+      - name: Logs bij fout
+        if: failure()
+        run: docker logs ts || true

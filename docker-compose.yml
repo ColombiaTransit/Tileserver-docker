@@ -1,19 +1,17 @@
 services:
   tileserver:
-    image: maptiler/tileserver-gl:v5.6.0
+    image: ghcr.io/colombiatransit/tileserver-docker:latest
+    # Of lokaal bouwen vanuit deze repo:
+    # build: .
     container_name: tileserver-colombia
     restart: unless-stopped
 
-    volumes:
-      - ./data:/data
-      - ./config.json:/data/config.json:ro
-      - ./styles:/data/styles:ro
+    environment:
+      PUBLIC_URL: https://apiv2.colombiatransit.co/api/tiles/
 
-    command:
-      - --config
-      - /data/config.json
-      - --public_url
-      - https://apiv2.colombiatransit.co/api/tiles/
+    volumes:
+      # colombia.mbtiles en colombia-terrain.mbtiles (via ./update-tiles.sh)
+      - ./data:/data
 
     networks:
       - traefik
