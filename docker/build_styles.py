@@ -2,7 +2,6 @@
 """Bouwt de styles, sprites, fonts en config.json voor het tileserver-image.
 
 Invoer (door de Dockerfile klaargezet in SRC):
-  SRC/basic-preview/style.json            uit de tileserver-gl base image
   SRC/<style>/style.json + sprite*         upstream, op vaste commits
   SRC/<style>/LICENSE.md
   SRC/fonts.zip                            openmaptiles/fonts v2.0
@@ -37,17 +36,13 @@ TERRAIN_SOURCE = {
 
 # Hillshade-kleuren per style, afgestemd op het palet
 HILLSHADE = {
-    "basic-preview": {"shadow": "#5a5a5a", "highlight": "#ffffff", "accent": "#5a5a5a", "exaggeration": 0.35},
     "positron":      {"shadow": "#a8a8a8", "highlight": "#ffffff", "accent": "#a8a8a8", "exaggeration": 0.25},
-    "dark-matter":   {"shadow": "#000000", "highlight": "#3c3c3c", "accent": "#000000", "exaggeration": 0.4},
     "osm-liberty":   {"shadow": "#473b24", "highlight": "#ffffff", "accent": "#aaaa99", "exaggeration": 0.35},
 }
 
 STYLES = {
     # id: (titel, sprite-bestandsnaam of None)
-    "basic-preview": ("Basic", None),
     "positron":      ("Positron", "sprite"),
-    "dark-matter":   ("Dark Matter", "sprite"),
     "osm-liberty":   ("OSM Liberty", "osm-liberty"),
 }
 

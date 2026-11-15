@@ -58,7 +58,7 @@ jobs:
             type=sha,format=short
             type=ref,event=pr
           labels: |
-            org.opencontainers.image.description=TileServer GL met Colombia vector- en terrain-tiles: Basic, Positron, Dark Matter, OSM Liberty (2D en 3D)
+            org.opencontainers.image.description=TileServer GL met Colombia vector- en terrain-tiles: Positron en OSM Liberty (2D en 3D)
             org.opencontainers.image.licenses=BSD-3-Clause
 
       - name: Build en push
@@ -90,11 +90,11 @@ jobs:
           curl -sf http://localhost:8080/styles.json | python3 -c '
           import json,sys
           ids={s["id"] for s in json.load(sys.stdin)}
-          want={f"{b}{v}" for b in ("basic-preview","positron","dark-matter","osm-liberty") for v in ("","-3d")}
+          want={f"{b}{v}" for b in ("positron","osm-liberty") for v in ("","-3d")}
           missing=want-ids
           print("styles:", sorted(ids))
           sys.exit(f"ontbrekend: {missing}" if missing else 0)'
-          for s in positron dark-matter osm-liberty; do
+          for s in positron osm-liberty; do
             curl -sf -o /dev/null "http://localhost:8080/styles/$s/sprite@2x.png"
           done
           curl -sf -o /dev/null "http://localhost:8080/fonts/Noto%20Sans%20Regular/0-255.pbf"
