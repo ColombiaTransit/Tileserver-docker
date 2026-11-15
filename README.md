@@ -6,7 +6,13 @@ Docker-image met [TileServer GL](https://github.com/maptiler/tileserver-gl) voor
 ghcr.io/colombiatransit/tileserver-docker:latest
 ```
 
-Het image wordt automatisch gebouwd en gepubliceerd bij elke push naar `main` die de `Dockerfile` of `docker/` raakt.
+Gebaseerd op `maptiler/tileserver-gl:v5.7.0`. Het image wordt automatisch gebouwd en gepubliceerd bij elke push naar `main` die de `Dockerfile` of `docker/` raakt; zie [Image bouwen](#image-bouwen).
+
+```
+Cloudflare (cache)  ──►  Traefik v3 (headers, Cache-Control)  ──►  tileserver-gl  ──►  volume /data
+                                                                     ▲ bij opstarten
+                                     GitHub Releases: colombia-mbtiles, colombia-height
+```
 
 ## Data
 
@@ -42,25 +48,94 @@ De upstream-styles worden tijdens het bouwen op vaste commits opgehaald en door 
 
 ## Installatie
 
+Vereisten: Docker met Compose (of Portainer), Traefik **v3** met het externe netwerk `traefik` en de middlewares `real-ip` uit de bestaande Traefik-config, ~10 GiB vrije schijfruimte, en een DNS-record voor `tileserver.colombiatransit.co` in Cloudflare.
+
 ```bash
 git clone https://github.com/ColombiaTransit/tileserver-docker.git
 cd tileserver-docker
-cp tileserver.yml /etc/traefik/       # map van de Traefik file-provider
+cp tileserver.yml /etc/traefik/       # map van de Traefik file-provider (watch: true)
 docker compose up -d                  # haalt bij de eerste start de tiles op
 docker compose logs -f                # voortgang van de download volgen
 ```
 
-Wekelijks verse tiles? Laat cron de container herstarten, ruim na de build van maandag 05:25 UTC:
+In Portainer: maak een stack met de inhoud van `docker-compose.yml`. Het image op GHCR is openbaar, dus er is geen registry-login nodig.
 
-```cron
-0 9 * * 1 docker restart tileserver-colombia
-```
+### Omgevingsvariabelen
 
-Een nieuwe versie van het image ophalen:
+| Variabele | Standaard | Doel |
+|---|---|---|
+| `PUBLIC_URL` | leeg | Basis-URL in styles en TileJSON, bijv. `https://tileserver.colombiatransit.co/` |
+| `TILES_UPDATE` | `true` | `false` = bij het opstarten niets ophalen, alleen bestaande tiles gebruiken |
+| `TILESERVER_GL_METRICS` | – | `true` = Prometheus-metrics van tileserver-gl aanzetten |
+
+### Bijwerken
+
+- **Tiles:** de vector tiles worden elke maandag om 05:25 UTC gebouwd. De container haalt ze op bij een herstart; plan die bijvoorbeeld met cron of een geplande taak in Portainer:
+
+  ```cron
+  0 9 * * 1 docker restart tileserver-colombia
+  ```
+
+- **Image** (nieuwe styles, tileserver-versie): `docker compose pull && docker compose up -d`, of *Pull and redeploy* in Portainer. De tiles in het volume blijven staan.
+
+## Traefik
+
+[`tileserver.yml`](tileserver.yml) gebruikt drie routers op dezelfde service, alleen om per soort bestand een passende `Cache-Control` te zetten; tileserver-gl doet dat zelf niet.
+
+| Router | Paden | Cache-Control |
+|---|---|---|
+| `tileserver-tiles` | `/data/…/{z}/{x}/{y}.pbf\|png`, `/styles/…/{z}/{x}/{y}.png` | 1 dag, `stale-while-revalidate` 7 dagen |
+| `tileserver-static` | `/fonts/…`, `/styles/…/sprite*` | 7 dagen |
+| `tileserver` | de rest: `style.json`, TileJSON, viewer | 5 minuten |
+
+Verder:
+
+- **Compressie** voor JSON en fonts; afbeeldingen worden overgeslagen en vector tiles zijn al gzip.
+- **Security-headers** (HSTS, `nosniff`, referrer-policy, `X-Robots-Tag`) zonder `frameDeny`, zodat kaarten in een iframe op andere sites mogen.
+- **CORS** (`Access-Control-Allow-Origin: *`), `ETag` en `Last-Modified` komen van tileserver-gl.
+- De routers gebruiken `PathRegexp` en vereisen daarom **Traefik v3**.
+
+## Cloudflare
+
+Cloudflare cachet standaard geen `.pbf` en `.json`. Eén Cache Rule laat Cloudflare de `Cache-Control` van Traefik volgen:
+
+- **Expression:** `(http.host eq "tileserver.colombiatransit.co")`
+- **Cache eligibility:** Eligible for cache
+- **Edge TTL:** Use cache-control header if present, bypass cache if not
+  - Status code TTL: **500–599 → No cache**, **404 → No cache** (Traefik zet de cache-header ook op foutmeldingen)
+- **Browser TTL:** Respect origin TTL
+
+Controleren:
 
 ```bash
-docker compose pull && docker compose up -d
+curl -sI https://tileserver.colombiatransit.co/data/v3/10/301/497.pbf | grep -iE "cf-cache-status|cache-control"
 ```
+
+De eerste aanvraag geeft `cf-cache-status: MISS`, de tweede `HIT`.
+
+## Problemen oplossen
+
+| Melding | Oorzaak en oplossing |
+|---|---|
+| `manifests/latest: unauthorized` bij pull | Het package op GHCR is privé. Zet het op openbaar (*Packages → tileserver-docker → Package settings → Change visibility*) of voeg `ghcr.io` als registry met een token (`read:packages`) toe in Portainer. |
+| `[tiles] FOUT: ontbrekend in /data` | De eerste download is mislukt; Docker start de container opnieuw. Controleer de netwerkverbinding naar `github.com`. |
+| `[tiles] … update mislukt`, daarna `Start met de bestaande tiles` | De nieuwe versie kon niet worden opgehaald of geverifieerd; de oude tiles blijven in gebruik. Bij de volgende start wordt het opnieuw geprobeerd. |
+| `/data is niet schrijfbaar` | Bij een bind mount in plaats van het named volume: `sudo chown -R 1000:1000 ./data`. |
+| 404 van Traefik | DNS, of `tileserver.yml` staat niet in de map van de file-provider. |
+| 502/504 | Container draait niet of zit niet in het `traefik`-netwerk; tijdens de eerste download is de tileserver nog niet gestart. |
+
+## Image bouwen
+
+De workflow [`docker-image.yml`](.github/workflows/docker-image.yml) bouwt het image en publiceert het als `latest`, `v5.7.0` (tileserver-versie) en `sha-<commit>`. Daarna draaien twee rooktests:
+
+1. met kleine test-tiles: alle styles aanwezig, sprites, fonts, terrain-tile en een server-side gerenderde tile;
+2. met nep-releases: tiles ophalen bij het opstarten, vergelijken, en bij een herstart niets opnieuw downloaden.
+
+Pull requests worden alleen gebouwd, niet gepubliceerd. Lokaal bouwen kan met `docker build -t tileserver-docker .` of door `build: .` aan te zetten in `docker-compose.yml`.
+
+**Een style toevoegen of bijwerken:** zet de commit (en voor de sprite de `gh-pages`-commit) als `ARG` in de `Dockerfile`, haal de bestanden op in de download-stap, en voeg de style toe aan `STYLES` en `HILLSHADE` in [`docker/build_styles.py`](docker/build_styles.py). De build faalt als een style nog externe bronnen heeft of een font gebruikt dat niet in `openmaptiles/fonts` staat.
+
+**tileserver-gl bijwerken:** pas `ARG TILESERVER_VERSION` in de `Dockerfile` aan.
 
 ## Bestanden
 
@@ -72,7 +147,8 @@ docker compose pull && docker compose up -d
 | `docker/fetch-tiles.mjs` | Haalt bij het opstarten nieuwe `.mbtiles` op en verifieert ze |
 | `docker/make_test_mbtiles.py` | Kleine test-data voor de rooktests in CI |
 | `docker-compose.yml` | Container in het `traefik`-netwerk |
-| `tileserver.yml` | Traefik-router en middlewares voor `tileserver.colombiatransit.co` |
+| `tileserver.yml` | Traefik-routers en middlewares voor `tileserver.colombiatransit.co` |
+| `.github/workflows/docker-image.yml` | Bouwt, test en publiceert het image op GHCR |
 
 ## Gebruik in MapLibre
 
