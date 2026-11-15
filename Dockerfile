@@ -53,9 +53,19 @@ LABEL org.opencontainers.image.source="https://github.com/ColombiaTransit/tilese
 
 COPY --from=assets /config /config
 COPY --chmod=755 docker/start.sh /usr/local/bin/start-tileserver
+COPY docker/fetch-tiles.mjs /usr/local/lib/tileserver-docker/fetch-tiles.mjs
 
-# De .mbtiles-bestanden komen via een volume op /data:
-#   colombia.mbtiles en colombia-terrain.mbtiles
-# PUBLIC_URL zet --public_url, bijv. https://tileserver.colombiatransit.co/
-ENV PUBLIC_URL=""
+# De .mbtiles-bestanden staan op een volume op /data en worden bij het
+# opstarten opgehaald of bijgewerkt (fetch-tiles.mjs):
+#   colombia.mbtiles          ~430 MB
+#   colombia-terrain.mbtiles  ~4,2 GiB
+# De eerste start duurt daardoor een paar minuten; de healthcheck krijgt
+# daarom ruim de tijd.
+#
+# PUBLIC_URL    zet --public_url, bijv. https://tileserver.colombiatransit.co/
+# TILES_UPDATE  false = niets ophalen, alleen bestaande bestanden gebruiken
+ENV PUBLIC_URL="" \
+    TILES_UPDATE="true"
+HEALTHCHECK --start-period=30m --interval=30s --timeout=10s --retries=3 \
+    CMD node /usr/src/app/src/healthcheck.js
 ENTRYPOINT ["/usr/local/bin/start-tileserver"]

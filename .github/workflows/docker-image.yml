@@ -81,7 +81,7 @@ jobs:
           python3 docker/make_test_mbtiles.py testdata
           chmod -R a+rwX testdata
           docker run -d --name ts -p 8080:8080 -v "$PWD/testdata:/data" \
-            -e PUBLIC_URL=http://localhost:8080/ "$img"
+            -e PUBLIC_URL=http://localhost:8080/ -e TILES_UPDATE=false "$img"
           for i in $(seq 1 30); do
             curl -sf http://localhost:8080/health >/dev/null && break
             sleep 2
@@ -103,6 +103,54 @@ jobs:
           curl -sf -o /dev/null "http://localhost:8080/styles/positron/256/0/0/0.png"
           echo "Rooktest geslaagd"
 
+      - name: Rooktest ophalen van tiles bij opstarten
+        if: github.event_name != 'pull_request'
+        run: |
+          set -eu
+          img=$(echo "${IMAGE}:sha-${GITHUB_SHA::7}" | tr "[:upper:]" "[:lower:]")
+          # Nep-releases met dezelfde opbouw als de echte (terrain in 3 delen)
+          python3 - <<'PY'
+          import hashlib, json, os, shutil
+          src = "testdata"
+          os.makedirs("www/vec", exist_ok=True)
+          os.makedirs("www/releases/latest/download", exist_ok=True)
+          os.makedirs("www/releases/download/v9.9.9", exist_ok=True)
+          v = open(f"{src}/colombia.mbtiles", "rb").read()
+          shutil.copy(f"{src}/colombia.mbtiles", "www/vec/colombia.mbtiles")
+          open("www/vec/colombia.mbtiles.sha256", "w").write(hashlib.sha256(v).hexdigest() + "\n")
+          t = open(f"{src}/colombia-terrain.mbtiles", "rb").read()
+          n = len(t) // 3 + 1
+          parts = []
+          for i in range(3):
+              chunk = t[i * n:(i + 1) * n]
+              name = f"colombia-terrain.mbtiles.part-{i:03d}"
+              open(f"www/releases/download/v9.9.9/{name}", "wb").write(chunk)
+              parts.append({"file": name, "bytes": len(chunk), "sha256": hashlib.sha256(chunk).hexdigest()})
+          json.dump({"release_version": "v9.9.9", "merged_mbtiles_sha256": hashlib.sha256(t).hexdigest(),
+                     "merged_mbtiles_bytes": len(t), "parts": parts},
+                    open("www/releases/latest/download/colombia-terrain.manifest.json", "w"))
+          PY
+          (cd www && python3 -m http.server 9077 >/dev/null 2>&1 &)
+          mkdir -p fetched && chmod 777 fetched
+          docker run -d --name ts2 --network host -v "$PWD/fetched:/data" \
+            -e VECTOR_BASE_URL=http://127.0.0.1:9077/vec \
+            -e TERRAIN_MANIFEST_URL=http://127.0.0.1:9077/releases/latest/download/colombia-terrain.manifest.json \
+            "$img" --port 8081
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8081/health >/dev/null && break
+            sleep 2
+          done
+          docker logs ts2
+          cmp fetched/colombia.mbtiles testdata/colombia.mbtiles
+          cmp fetched/colombia-terrain.mbtiles testdata/colombia-terrain.mbtiles
+          curl -sf -o /dev/null http://localhost:8081/data/colombia-terrain/0/0/0.png
+          # Tweede start: niets opnieuw downloaden
+          docker restart ts2 >/dev/null; sleep 5
+          [ "$(docker logs ts2 2>&1 | grep -c "al de nieuwste")" -ge 2 ]
+          echo "Ophalen bij opstarten werkt"
+
       - name: Logs bij fout
         if: failure()
-        run: docker logs ts || true
+        run: |
+          docker logs ts || true
+          docker logs ts2 || true

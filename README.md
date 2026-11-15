@@ -10,14 +10,23 @@ Het image wordt automatisch gebouwd en gepubliceerd bij elke push naar `main` di
 
 ## Data
 
-De `.mbtiles` zitten niet in het image; ze komen via een volume op `/data`:
+De `.mbtiles` zitten niet in het image. De container haalt ze **bij elke start** op en zet ze in het volume op `/data`:
 
 | Data-id | Bestand | Bron |
 |---|---|---|
 | `v3` | `colombia.mbtiles` – OpenMapTiles vector tiles, ~430 MB | [colombia-mbtiles](https://github.com/ColombiaTransit/colombia-mbtiles), release `planetiler-latest` (elke maandag) |
 | `colombia-terrain` | `colombia-terrain.mbtiles` – Terrain-RGB hoogtes, z0–13, ~4,2 GiB | [colombia-height](https://github.com/ColombiaTransit/colombia-height), release `latest` |
 
-Beide bestanden zijn verplicht. `update-tiles.sh` haalt ze op (vereist `python3`; reken op ~10 GiB vrije ruimte tijdens een terrain-update).
+Bij het opstarten ([`docker/fetch-tiles.mjs`](docker/fetch-tiles.mjs)):
+
+- de checksum van elke release wordt vergeleken met de opgeslagen `.sha256`; alleen bij een nieuwe versie of een ontbrekend bestand wordt gedownload;
+- er wordt naar een tijdelijk bestand gedownload en pas na een geldige checksum vervangen (terrain: elk deel én het geheel);
+- mislukt een update terwijl er al tiles zijn, dan start de tileserver met de oude versie;
+- ontbreekt een bestand en lukt de download niet, dan stopt de container en probeert Docker het opnieuw.
+
+De eerste start duurt een paar minuten (~4,6 GB). Reken op ~10 GiB vrije ruimte, want tijdens een terrain-update staat het bestand even dubbel op schijf. Met `TILES_UPDATE=false` wordt niets opgehaald.
+
+Nieuwe tiles ophalen (vector tiles komen elke maandag uit) doe je met een herstart: `docker compose restart`.
 
 ## Styles
 
@@ -36,14 +45,14 @@ De upstream-styles worden tijdens het bouwen op vaste commits opgehaald en door 
 git clone https://github.com/ColombiaTransit/tileserver-docker.git
 cd tileserver-docker
 cp tileserver.yml /etc/traefik/       # map van de Traefik file-provider
-./update-tiles.sh                     # eerste download van de tiles
-docker compose up -d
+docker compose up -d                  # haalt bij de eerste start de tiles op
+docker compose logs -f                # voortgang van de download volgen
 ```
 
-Tiles wekelijks bijwerken via cron, ruim na de build van maandag 05:25 UTC:
+Wekelijks verse tiles? Laat cron de container herstarten, ruim na de build van maandag 05:25 UTC:
 
 ```cron
-0 9 * * 1 /pad/naar/tileserver-docker/update-tiles.sh >> /var/log/update-tiles.log 2>&1
+0 9 * * 1 docker restart tileserver-colombia
 ```
 
 Een nieuwe versie van het image ophalen:
@@ -58,11 +67,11 @@ docker compose pull && docker compose up -d
 |---|---|
 | `Dockerfile` | Bouwt het image: haalt styles, sprites en fonts op en genereert `/config` |
 | `docker/build_styles.py` | Zet de upstream-styles om en schrijft `config.json` |
-| `docker/start.sh` | Entrypoint; zet `--public_url` uit `PUBLIC_URL` |
-| `docker/make_test_mbtiles.py` | Kleine test-data voor de rooktest in CI |
+| `docker/start.sh` | Entrypoint: tiles ophalen, daarna tileserver-gl starten met `--public_url` uit `PUBLIC_URL` |
+| `docker/fetch-tiles.mjs` | Haalt bij het opstarten nieuwe `.mbtiles` op en verifieert ze |
+| `docker/make_test_mbtiles.py` | Kleine test-data voor de rooktests in CI |
 | `docker-compose.yml` | Container in het `traefik`-netwerk |
 | `tileserver.yml` | Traefik-router en middlewares voor `tileserver.colombiatransit.co` |
-| `update-tiles.sh` | Werkt de `.mbtiles` bij en herstart de container alleen bij wijzigingen |
 
 ## Gebruik in MapLibre
 

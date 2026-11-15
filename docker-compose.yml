@@ -8,10 +8,12 @@ services:
 
     environment:
       PUBLIC_URL: https://tileserver.colombiatransit.co/
+      # Bij elke start worden nieuwe tiles opgehaald; zet op "false" om dat over te slaan
+      TILES_UPDATE: "true"
 
     volumes:
-      # colombia.mbtiles en colombia-terrain.mbtiles (via ./update-tiles.sh)
-      - ./data:/data
+      # colombia.mbtiles en colombia-terrain.mbtiles (~4,6 GB), opgehaald bij het opstarten
+      - tiles:/data
 
     networks:
       - traefik
@@ -19,6 +21,9 @@ services:
     labels:
       - traefik.enable=true
       - traefik.http.services.tileserver.loadbalancer.server.port=8080
+
+volumes:
+  tiles:
 
 networks:
   traefik:
