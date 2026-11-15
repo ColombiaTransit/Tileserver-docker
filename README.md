@@ -33,6 +33,7 @@ Nieuwe tiles ophalen (vector tiles komen elke maandag uit) doe je met een hersta
 | Style | 2D | 3D (terrein + hillshade) |
 |---|---|---|
 | Positron (licht, rustig; goed onder routes en haltes) | `positron` | `positron-3d` |
+| OSM Bright (volledige kaart, klassiek) | `osm-bright` | `osm-bright-3d` |
 | OSM Liberty (volledige kaart, met hillshade) | `osm-liberty` | `osm-liberty-3d` |
 
 Style-URL: `https://tileserver.colombiatransit.co/styles/<style>/style.json`
@@ -100,5 +101,5 @@ Buiten Colombiaans land geeft de terrain-data HTTP 204. De vlakke zee is alleen 
 
 - Kaartdata © OpenStreetMap-bijdragers, [ODbL-1.0](https://opendatacommons.org/licenses/odbl/)
 - Hoogtedata: Copernicus DEM GLO-30, zie [colombia-height](https://github.com/ColombiaTransit/colombia-height/blob/main/release/DATA_LICENSE.md)
-- Styles: [Positron](https://github.com/openmaptiles/positron-gl-style) (code BSD-3-Clause, design onder CC-BY; © MapTiler/OpenMapTiles en CARTO), [OSM Liberty](https://github.com/maputnik/osm-liberty) (BSD). De licentie van elke style staat in het image naast de style (`/config/styles/<id>/LICENSE.md`).
+- Styles: [Positron](https://github.com/openmaptiles/positron-gl-style) (code BSD-3-Clause, design onder CC-BY; © MapTiler/OpenMapTiles en CARTO), [OSM Bright](https://github.com/openmaptiles/osm-bright-gl-style) (code BSD-3-Clause, design onder CC-BY; © MapTiler/OpenMapTiles en Mapbox), [OSM Liberty](https://github.com/maputnik/osm-liberty) (BSD). De licentie van elke style staat in het image naast de style (`/config/styles/<id>/LICENSE.md`).
 - Fonts: [openmaptiles/fonts](https://github.com/openmaptiles/fonts) (Open Font License / Apache 2.0)

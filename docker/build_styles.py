@@ -37,12 +37,14 @@ TERRAIN_SOURCE = {
 # Hillshade-kleuren per style, afgestemd op het palet
 HILLSHADE = {
     "positron":      {"shadow": "#a8a8a8", "highlight": "#ffffff", "accent": "#a8a8a8", "exaggeration": 0.25},
+    "osm-bright":    {"shadow": "#473b24", "highlight": "#ffffff", "accent": "#aaaa99", "exaggeration": 0.3},
     "osm-liberty":   {"shadow": "#473b24", "highlight": "#ffffff", "accent": "#aaaa99", "exaggeration": 0.35},
 }
 
 STYLES = {
     # id: (titel, sprite-bestandsnaam of None)
     "positron":      ("Positron", "sprite"),
+    "osm-bright":    ("OSM Bright", "sprite"),
     "osm-liberty":   ("OSM Liberty", "osm-liberty"),
 }
 
