@@ -1,20 +1,106 @@
 http:
 
   ## TileServer GL via tileserver.colombiatransit.co ##
+  # Drie routers op dezelfde service, alleen om per soort bestand een
+  # passende Cache-Control mee te geven:
+  #   tiles   vector/terrain/rendered tiles   1 dag  (data wordt wekelijks ververst)
+  #   static  fonts en sprites                7 dagen (veranderen alleen met een nieuw image)
+  #   overig  style.json, TileJSON, viewer    5 minuten
+  # tileserver-gl zet zelf geen Cache-Control; CORS (Access-Control-Allow-Origin: *)
+  # en ETag/Last-Modified komen wel van tileserver-gl zelf.
   routers:
+    tileserver-tiles:
+      entryPoints:
+        - web
+      rule: "Host(`tileserver.colombiatransit.co`) && PathRegexp(`^/(data|styles)/[^/]+/([0-9]+/)?[0-9]+/[0-9]+/[0-9]+(@[0-9]x)?\\.(pbf|mvt|png|jpg|jpeg|webp)$`)"
+      priority: 300
+      service: tileserver@docker
+      middlewares:
+        - tileserver-tiles
+
+    tileserver-static:
+      entryPoints:
+        - web
+      rule: "Host(`tileserver.colombiatransit.co`) && (PathPrefix(`/fonts/`) || PathRegexp(`^/styles/[^/]+/sprite`))"
+      priority: 200
+      service: tileserver@docker
+      middlewares:
+        - tileserver-static
+
     tileserver:
       entryPoints:
         - web
       rule: "Host(`tileserver.colombiatransit.co`)"
+      priority: 100
       service: tileserver@docker
       middlewares:
-        - tileserver@file
+        - tileserver-default
 
   ## MIDDLEWARES ##
   middlewares:
-    tileserver:
+    tileserver-tiles:
       chain:
         middlewares:
-          - default-headers
+          - tileserver-headers
           - real-ip
-          - compress-gzip
+          - tileserver-compress
+          - tileserver-cache-tiles
+
+    tileserver-static:
+      chain:
+        middlewares:
+          - tileserver-headers
+          - real-ip
+          - tileserver-compress
+          - tileserver-cache-static
+
+    tileserver-default:
+      chain:
+        middlewares:
+          - tileserver-headers
+          - real-ip
+          - tileserver-compress
+          - tileserver-cache-short
+
+    # Zoals default-headers, maar zonder frameDeny/SAMEORIGIN: de viewer en
+    # kaarten mogen in een iframe op andere sites (bijv. colombiatransit.co).
+    tileserver-headers:
+      headers:
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        stsSeconds: 15552000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        referrerPolicy: strict-origin-when-cross-origin
+        hostsProxyHeaders:
+          - X-Forwarded-Host
+        customRequestHeaders:
+          X-Forwarded-Proto: https
+        customResponseHeaders:
+          X-Robots-Tag: 'noindex, nofollow'
+          server: ''
+
+    # Vector tiles zijn al gzip; PNG/JPEG/WebP hebben geen baat bij compressie.
+    # JSON (styles, TileJSON) en font-PBF's worden wel gecomprimeerd.
+    tileserver-compress:
+      compress:
+        excludedContentTypes:
+          - image/png
+          - image/jpeg
+          - image/webp
+        minResponseBodyBytes: 1024
+
+    tileserver-cache-tiles:
+      headers:
+        customResponseHeaders:
+          Cache-Control: 'public, max-age=86400, stale-while-revalidate=604800'
+
+    tileserver-cache-static:
+      headers:
+        customResponseHeaders:
+          Cache-Control: 'public, max-age=604800, stale-while-revalidate=86400'
+
+    tileserver-cache-short:
+      headers:
+        customResponseHeaders:
+          Cache-Control: 'public, max-age=300'
